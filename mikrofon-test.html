@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mikrofon-Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; background: #f5f6f8; color: #17212b; }
+    main { max-width: 480px; margin: 30px auto; padding: 24px; border-radius: 18px; background: white; box-shadow: 0 4px 22px #0001; }
+    h1 { margin-top: 0; font-size: 24px; }
+    #status { background: #edf3f5; padding: 14px; border-radius: 10px; margin-bottom: 18px; }
+    .buttons { display: flex; gap: 10px; }
+    button { flex: 1; border: none; padding: 15px 8px; border-radius: 10px; font-size: 15px; cursor: pointer; }
+    #start { background: #087d69; color: white; }
+    #stop { background: #d84c4c; color: white; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    audio { display: block; width: 100%; margin-top: 20px; }
+    #error { color: #b42318; margin-top: 12px; overflow-wrap: anywhere; }
+    small { display: block; color: #52616b; margin-top: 16px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>🎙 Mikrofon-Test</h1>
+  <div id="status" role="status">Bereit zur Aufnahme</div>
+  <div class="buttons">
+    <button id="start">Aufnahme starten</button>
+    <button id="stop" disabled>Stoppen</button>
+  </div>
+  <audio id="player" controls></audio>
+  <div id="error" role="alert"></div>
+  <small>Hinweis: Mikrofonzugriff benötigt normalerweise eine HTTPS-Seite oder localhost. Beim direkten Öffnen einer heruntergeladenen HTML-Datei kann Chrome den Zugriff verweigern.</small>
+</main>
+<script>
+  const startButton = document.getElementById('start');
+  const stopButton = document.getElementById('stop');
+  const status = document.getElementById('status');
+  const player = document.getElementById('player');
+  const error = document.getElementById('error');
+  let stream, recorder, chunks = [], audioURL;
+
+  startButton.addEventListener('click', async () => {
+    error.textContent = '';
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Mikrofonzugriff ist hier nicht verfügbar. Bitte die Seite über HTTPS öffnen.');
+      }
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recorder = new MediaRecorder(stream);
+      chunks = [];
+      recorder.addEventListener('dataavailable', event => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+      recorder.addEventListener('stop', () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType });
+        if (audioURL) URL.revokeObjectURL(audioURL);
+        audioURL = URL.createObjectURL(blob);
+        player.src = audioURL;
+        stream.getTracks().forEach(track => track.stop());
+        status.textContent = 'Aufnahme fertig – jetzt abspielen';
+        startButton.disabled = false;
+        stopButton.disabled = true;
+      });
+      recorder.start();
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      status.textContent = '🔴 Aufnahme läuft …';
+    } catch (err) {
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      status.textContent = 'Aufnahme konnte nicht gestartet werden';
+      error.textContent = err.message;
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    }
+  });
+
+  stopButton.addEventListener('click', () => {
+    if (recorder?.state === 'recording') recorder.stop();
+  });
+</script>
+</body>
+</html>
